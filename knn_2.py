@@ -29,11 +29,12 @@ centers_x = []
 centers_y = []
 
 def selectStandardPoints(percent):
+    print(F"Inside selectStandardPoints {percent}")
     group_classes()
     best_from_class = []
     for i in range(rows):
         for j in range(columns):
-            best_from_class.append(find_best_in_class_center(indices_standard[i][j], percent))
+            best_from_class.append(find_best_in_class(indices_standard[i][j], percent))
     for p in best_from_class:
         for q in p:
             standard_x1.append(x1[q])
@@ -48,48 +49,71 @@ def find_best_in_class(points, percent):
     res = []
     diff_points = {}
     for i in range(len(points)):
-        distances = []
-        diff = 0
+        sum = 0
         for j in range(len(points)):
-            if (i != j):
-                one_x1 = x1[points[i]]
-                one_x2 = x2[points[i]]
-                two_x1 = x1[points[j]]
-                two_x2 = x2[points[j]]
-                distances.append(distance_to_one(one_x1, two_x1,
-                                                    one_x2, two_x2))
-        for k in range(len(distances)):
-            diff = abs(diff - distances[k])
-        diff_points.update({diff:points[i]})
-    diff_points_keys = sorted(diff_points.keys())
-    num_points = round(len(diff_points_keys) * percent)
-    for k in range(num_points):
-        res.append(diff_points[diff_points_keys[k]])
+            if (i!=j):
+                sum += distance_to_one(x1[points[i]], x1[points[j]], x2[points[i]], x2[points[j]])
+        diff_points.update({sum : points[i]})
+    sorted_sum = sorted(diff_points.keys())
+    indexes_percent = round(percent * len(points))
+#    print("---------")
+#    print(percent)
+#    print(len(sorted_sum))
+#    print(indexes_percent)
+#    print("---------")
+    for k in range(indexes_percent):
+        res.append(diff_points.get(sorted_sum[k]))
     return res
 
-def find_best_in_class_center(points, percent):
-    res = []
-    diff_points = {}
-    points_class = classes[points[0]]
-    row = points_class//10
-    column = points_class % 10
-    half_ystep = ystep / 2
-    half_xstep = xstep / 2
-    center_y = ((row-1) * ystep) + half_ystep + a1
-    center_x = ((column-1) * xstep) + half_xstep + a2
-    centers_x.append(center_x)
-    centers_y.append(center_y)
-    for i in range(len(points)):
-        diff = 0
-        one_x1 = x1[points[i]]
-        one_x2 = x2[points[i]]
-        diff = distance_to_one(one_x1, center_x, one_x2, center_y)
-        diff_points.update({diff:points[i]})
-    diff_points_keys = sorted(diff_points.keys())
-    num_points = round(len(diff_points_keys) * percent)
-    for k in range(num_points):
-        res.append(diff_points[diff_points_keys[k]])
-    return res
+def find_best_percent():
+    print("Finding best percent")
+    for p in range(5, 100, 5):
+        normalized_percent = 0.01 * p
+        print("&&")
+        print(normalized_percent)
+        print(F"Percent {p}")
+        if (len(standard_x1) != 0):
+            standard_x1.clear()
+            standard_x2.clear()
+            standard_classes.clear()
+        selectStandardPoints(normalized_percent)
+        best_parzen_standard()
+        
+            
+def best_parzen_standard():
+    countRight = 0
+    countWrong = 0
+    longestRadius = 0
+    if (xd > yd):
+        longestRadius = xd/2
+    else:
+        longestRadius = yd/2
+    count = []
+    for i in range(1,6):
+        countR = {}
+        bestForRadius = 0
+        for radius in np.arange(0.1, longestRadius, 0.1):
+            countRight = 0;
+            countWrong = 0;
+            for d in range(len(standard_x1)):
+                findx = standard_x1[d]
+                findy = standard_x2[d]
+                if (knnParzenWithoutJ(findx, findy, radius, i, d) == standard_classes[d]):
+                    countRight += 1
+                else:
+                    countWrong += 1
+            countR.update({radius:countWrong})
+        countRSorted = sorted(countR.values())
+        bestVal = countRSorted[0]
+        for cl,c in countR.items():
+            if (c == bestVal):
+                bestForRadius = cl
+        count.append(bestForRadius)
+    for e in range (0, len(count)):
+        print("kernel: ", end="")
+        print(e+1, end="; radius: ")
+        print(count[e])
+            
 
 def group_classes():
     classes_set = set(classes)
@@ -279,9 +303,6 @@ def knn_parzen_standard(find_x1, find_x2, radius, kernel):
         sortedCount = sorted(superparabolic.values(), reverse = True)
     elif (kernel == 5):
         sortedCount = sorted(gaussian.values(), reverse = True)
-#    print classes and weights
-#    print(count)
-#    print(sortedCount)
     res = -1
     if (kernel == 1):
         for cl, c in square.items():
@@ -344,10 +365,9 @@ def knn(find_x1, find_x2, k):
 def knn_standard(find_x1, find_x2, k):
     distances = {}
     for i in range(len(standard_x1)):
-        d = math.sqrt((find_x2 - standard_x2[i])**2 + (find_x1 - standard_x1[i])**2)
-        distances.update({d:standard_classes[i]})  
-    sortedDistances = distances.keys()
-    sortedDistances = sorted(sortedDistances)
+        d = distance_to_one(standard_x2[i], find_x2, standard_x1[i], find_x1)
+        distances.update({d:standard_classes[i]})
+    sortedDistances = sorted(distances.keys())
     count = {}
     for j in range(k):
         cl = distances.get(sortedDistances[j])
@@ -574,16 +594,6 @@ def knnParzenWithoutJ(find_x1, find_x2, radius, kernel, c):
 #    plt.show()
     return res    
 
-form_grid()
-form_objects()
-addClasses()
-plt.scatter(x1, x2)
-
-selectStandardPoints(percent_for_standard)
-
-
-#bestParzen()
-#bestK()
 #
 #while (True):
 #    x1f = float(input('Enter x1:'))
@@ -598,16 +608,37 @@ selectStandardPoints(percent_for_standard)
 #    form_grid()
 #    plt.scatter(x1f, x2f, s=80, color="green")
 #    plt.show()
+    
+
+#   testing
+#   form grid and objects with classes
+form_grid()
+form_objects()
+addClasses()
+plt.scatter(x1, x2)
+#    form array of standard points
+#selectStandardPoints(percent_for_standard)
+#print(standard_x1)
+
+#   best radius and K for all points set
+#bestParzen()
+#bestK()
+
+#    searched point
 x1f = 7.6
 x2f = 13.3
+#   radius
 r = 1.8
+#    kernel
 kernel = 3
-print("\nParzen: "+str(knnParzen(x1f, x2f, r, kernel)))
-print("\nParzen (standard): "+str(knn_parzen_standard(x1f, x2f, r, kernel)))
-print("\nKNN: "+str(knn(x1f, x2f, 1)))
-print("\nKNN (standard): "+str(knn_standard(x1f, x2f, 1)))
-#plt.scatter(x1, x2)
-form_grid()
+
+find_best_percent()
+#print("\nParzen: "+str(knnParzen(x1f, x2f, r, kernel)))
+#print("\nParzen (standard): "+str(knn_parzen_standard(x1f, x2f, r, kernel)))
+#print("\nKNN: "+str(knn(x1f, x2f, 1)))
+#print("\nKNN (standard): "+str(knn_standard(x1f, x2f, kernel)))
+
+#    plot searched point
 plt.scatter(x1f, x2f, s=80, color="black")
 plt.show()
 
